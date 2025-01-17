@@ -1,0 +1,3 @@
+gemini:
+  type: gemini
+  model_name: gemini-pro
