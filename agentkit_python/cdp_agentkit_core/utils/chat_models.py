@@ -1,7 +1,8 @@
 import os
 from typing import Dict, Tuple, Type
+import yaml
+from pathlib import Path
 
-from agentkit.utils.config_loader import load_config
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
 
@@ -15,7 +16,14 @@ def get_chat_model(model_id: str) -> Tuple[BaseChatModel, Dict[str, str]]:
     Returns:
         A tuple containing the chat model object and its parameters.
     """
-    chat_models_config = load_config("chat_models.yaml")
+    config_path = Path(__file__).parent / "chat_models.yaml"
+    try:
+        with open(config_path, "r") as file:
+            chat_models_config = yaml.safe_load(file)
+    except FileNotFoundError:
+        print(f"Error: Could not find chat_models.yaml at {config_path}")
+        chat_models_config = {}
+    
     model_params = chat_models_config.get(model_id)
 
     if model_params is None:

@@ -14,8 +14,8 @@ cdp-sdk = "^0.13.0"
 pydantic = "^2.0"
 web3 = "^7.6.0"
 langchain-google-genai = "^0.0.9"
-neynar-api = "^2.0.0"
 python-telegram-bot = "^20.8"
+python-dotenv = "^1.0.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.7.1"

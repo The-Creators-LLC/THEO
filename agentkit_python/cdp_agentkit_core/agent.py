@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
-from agentkit.core.agent import Agent
-from agentkit.utils.prompt import Prompt
-from agentkit.utils.chat_models import get_chat_model
+from agentkit_python.cdp_agentkit_core.agent import Agent
+from agentkit_python.cdp_agentkit_core.utils.prompt import Prompt
+from agentkit_python.cdp_agentkit_core.utils.chat_models import get_chat_model
 from typing import Any
 
 # Load environment variables
