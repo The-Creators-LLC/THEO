@@ -2,7 +2,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from agentkit_python.cdp_agentkit_core.agent import TheoAgent
-from agentkit_python.cdp_agentkit_core.utils.database import create_tables
+from agentkit_python.cdp_agentkit_core.utils.database import Database
 import datetime
 
 # Import your custom actions
@@ -41,7 +41,8 @@ async def should_highlight_creator():
 
 async def main():
     # Initialize database tables
-    create_tables()
+    db = Database()
+    db.create_tables()
 
     # Initialize THEO's actions
     monitor_farcaster_action = MonitorFarcaster()
@@ -57,19 +58,24 @@ async def main():
 
     # Start THEO's main loop
     while True:
-        # Example: Run the monitoring action
-        await monitor_farcaster_action.run()
+        try:
+            # Run the monitoring action
+            await monitor_farcaster_action.run()
 
-        # Update and post the leaderboard every 4 hours
-        if await should_update_leaderboard(): 
-            await update_leaderboard_action.run()
+            # Update and post the leaderboard every 4 hours
+            if await should_update_leaderboard(): 
+                await update_leaderboard_action.run()
 
-        # Highlight the "Based Creator of the Day" daily
-        if await should_highlight_creator():
-            await highlight_creator_action.run()
+            # Highlight the "Based Creator of the Day" daily
+            if await should_highlight_creator():
+                await highlight_creator_action.run()
 
-        # Wait for a certain period (e.g., 1 hour)
-        await asyncio.sleep(3600)
+            # Wait for a certain period (e.g., 1 hour)
+            await asyncio.sleep(3600)
+
+        except Exception as e:
+            print(f"An error occurred in the main loop: {e}")
+            await asyncio.sleep(60)  # Wait for 1 minute before retrying
 
 if __name__ == "__main__":
     asyncio.run(main())

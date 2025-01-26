@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 from agentkit_python.cdp_agentkit_core.actions import Action
-from ..utils.farcaster import post_cast, get_cast
-from ..utils.database import get_daily_leader
+from agentkit_python.cdp_agentkit_core.utils.farcaster import post_cast, get_cast
+from agentkit_python.cdp_agentkit_core.utils.database import Database
 
 # Load environment variables
 load_dotenv()
@@ -11,6 +11,7 @@ class HighlightCreator(Action):
     def __init__(self):
         self.neynar_api_key = os.getenv("NEYNAR_API_KEY")
         self.signer_uuid = os.getenv("SIGNER_UUID")
+        self.db = Database()
 
     async def run(self, *args, **kwargs):
         """
@@ -18,7 +19,7 @@ class HighlightCreator(Action):
         """
         print("Highlighting Based Creator of the Day...")
 
-        leader = get_daily_leader()
+        leader = self.db.get_daily_leader()
         if leader:
             cast = await get_cast(self.neynar_api_key, leader["hash"])
 

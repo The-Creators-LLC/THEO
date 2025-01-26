@@ -13,9 +13,9 @@ class TheoAgent(Agent):
     The main class for the THEO agent.
     """
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, tools, **kwargs: Any):
         self.chat_model, self.chat_model_params = get_chat_model(model_id="gemini")
-        super().__init__(**kwargs)
+        super().__init__(tools=tools, **kwargs)
 
     async def handle_message(self, prompt: Prompt):
         # Send a welcome message and instructions to the user upon initial interaction

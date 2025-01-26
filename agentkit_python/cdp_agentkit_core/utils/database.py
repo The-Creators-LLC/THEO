@@ -1,188 +1,270 @@
-# agentkit_python/utils/database.py
 import sqlite3
 from typing import List, Optional
+import re
 
 DATABASE_NAME = "theo_data.db"  # Database file name
 
-def create_tables():
-    """Creates the necessary tables if they don't exist."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            fid INTEGER PRIMARY KEY,  
-            username TEXT UNIQUE
-        )
-    """)
+class Database:
+    def __init__(self, db_name: str = DATABASE_NAME):
+        self.db_name = db_name
+        self.conn = None  # Initialize connection to None
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS posts (
-            hash TEXT PRIMARY KEY,
-            fid INTEGER,
-            username TEXT,
-            text TEXT,
-            likes INTEGER,
-            timestamp TEXT,
-            FOREIGN KEY (fid) REFERENCES users(fid)
-        )
-    """)
+    def connect(self):
+        """Establishes a connection to the database."""
+        try:
+            self.conn = sqlite3.connect(self.db_name)
+            self.conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key support
+        except sqlite3.Error as e:
+            print(f"Error connecting to database: {e}")
+            # Consider logging the error
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS nominations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nominator_fid INTEGER,
-            nominee_fid INTEGER,
-            post_hash TEXT,
-            timestamp TEXT,
-            FOREIGN KEY (nominator_fid) REFERENCES users(fid),
-            FOREIGN KEY (nominee_fid) REFERENCES users(fid),
-            FOREIGN KEY (post_hash) REFERENCES posts(hash)
-        )
-    """)
+    def close(self):
+        """Closes the database connection."""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS based_creator_of_day (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fid INTEGER UNIQUE,
-            date TEXT UNIQUE,
-            FOREIGN KEY (fid) REFERENCES users(fid)
-        )
-    """)
+    def create_tables(self):
+        """Creates the necessary tables if they don't exist."""
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    fid INTEGER PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL
+                )
+            """
+            )
 
-    conn.commit()
-    conn.close()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS posts (
+                    hash TEXT PRIMARY KEY,
+                    fid INTEGER NOT NULL,
+                    username TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    likes INTEGER,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (fid) REFERENCES users(fid)
+                )
+            """
+            )
 
-def get_user(fid: int) -> Optional[dict]:
-    """Retrieves a user by their Farcaster ID."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE fid = ?", (fid,))
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        return {"fid": result[0], "username": result[1]}
-    return None
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS nominations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nominator_fid INTEGER NOT NULL,
+                    nominee_fid INTEGER NOT NULL,
+                    post_hash TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (nominator_fid) REFERENCES users(fid),
+                    FOREIGN KEY (nominee_fid) REFERENCES users(fid),
+                    FOREIGN KEY (post_hash) REFERENCES posts(hash),
+                    UNIQUE (nominator_fid, post_hash)
+                )
+            """
+            )
 
-def create_user(fid: int, username: str):
-    """Creates a new user."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO users (fid, username) VALUES (?, ?)", (fid, username))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        print(f"User with FID {fid} already exists.")
-    finally:
-        conn.close()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS based_creator_of_day (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fid INTEGER UNIQUE NOT NULL,
+                    date TEXT UNIQUE NOT NULL,
+                    FOREIGN KEY (fid) REFERENCES users(fid)
+                )
+            """
+            )
 
-def get_post(hash: str) -> Optional[dict]:
-    """Retrieves a post by its hash."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM posts WHERE hash = ?", (hash,))
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        return {
-            "hash": result[0],
-            "fid": result[1],
-            "username": result[2],
-            "text": result[3],
-            "likes": result[4],
-            "timestamp": result[5]
-        }
-    return None
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"An error occurred while creating tables: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
 
-def create_post(fid: int, username: str, text: str, likes: int, timestamp: str, hash: str):
-    """Creates a new post."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO posts (fid, username, text, likes, timestamp, hash)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (fid, username, text, likes, timestamp, hash))
-    conn.commit()
-    conn.close()
+    def get_user(self, fid: int) -> Optional[dict]:
+        """Retrieves a user by their Farcaster ID."""
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE fid = ?", (fid,))
+            result = cursor.fetchone()
+            if result:
+                return {"fid": result[0], "username": result[1]}
+        except sqlite3.Error as e:
+            print(f"An error occurred while retrieving user: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
+        return None
 
-def record_nomination(nominator_fid: int, nominee_fid: int, post_hash: str, timestamp: str):
-    """Records a nomination."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            INSERT INTO nominations (nominator_fid, nominee_fid, post_hash, timestamp)
-            VALUES (?, ?, ?, ?)
-        """, (nominator_fid, nominee_fid, post_hash, timestamp))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        print(f"Nomination already exists.")
-    finally:
-        conn.close()
+    def create_user(self, fid: int, username: str):
+        """Creates a new user."""
+        if not isinstance(fid, int):
+            print(f"Error: Invalid FID format: {fid}. FID must be an integer.")
+            return
 
-def get_daily_leader():
-    """
-    Retrieves the current "Based Creator of the Day" post from the database.
-    """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.* 
-        FROM posts p
-        JOIN based_creator_of_day b ON p.fid = b.fid
-        WHERE b.date = DATE('now')
-        ORDER BY p.likes DESC
-        LIMIT 1
-    """)
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        return {
-            "hash": result[0],
-            "fid": result[1],
-            "username": result[2],
-            "text": result[3],
-            "likes": result[4],
-            "timestamp": result[5]
-        }
-    return None
+        if not self.is_valid_username(username):
+            print(f"Error: Invalid username format: {username}")
+            return
 
-def mark_based_creator_of_the_day(fid: int):
-    """Marks the given user as the 'Based Creator of the Day'."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO based_creator_of_day (fid, date) VALUES (?, DATE('now'))", (fid,))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        print(f"Based Creator of the Day for today already exists.")
-    finally:
-        conn.close()
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO users (fid, username) VALUES (?, ?)", (fid, username))
+            self.conn.commit()
+        except sqlite3.IntegrityError as e:
+            print(f"Failed to create user: {e}")
+            # Consider logging the error
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
 
-def get_leaderboard() -> List[dict]:
-    """
-    Retrieves the leaderboard data from the database.
-    """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
+    def get_post(self, hash: str) -> Optional[dict]:
+        """Retrieves a post by its hash."""
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM posts WHERE hash = ?", (hash,))
+            result = cursor.fetchone()
+            if result:
+                return {
+                    "hash": result[0],
+                    "fid": result[1],
+                    "username": result[2],
+                    "text": result[3],
+                    "likes": result[4],
+                    "timestamp": result[5]
+                }
+        except sqlite3.Error as e:
+            print(f"An error occurred while retrieving post: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
+        return None
 
-    # This is a simplified example. You might need a more complex query to calculate points
-    # based on nominations and other factors.
-    cursor.execute("""
-        SELECT u.username, COUNT(n.nominee_fid) as points
-        FROM users u
-        LEFT JOIN nominations n ON u.fid = n.nominee_fid
-        GROUP BY u.username
-        ORDER BY points DESC
-        LIMIT 10
-    """)
-    results = cursor.fetchall()
-    conn.close()
+    def create_post(self, fid: int, username: str, text: str, likes: int, timestamp: str, hash: str):
+        """Creates a new post."""
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                INSERT INTO posts (fid, username, text, likes, timestamp, hash)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (fid, username, text, likes, timestamp, hash))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"An error occurred while creating post: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
 
-    leaderboard = []
-    for result in results:
-        leaderboard.append({"username": result[0], "points": result[1]})
-    return leaderboard
+    def record_nomination(self, nominator_fid: int, nominee_fid: int, post_hash: str, timestamp: str):
+        """Records a nomination."""
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                INSERT INTO nominations (nominator_fid, nominee_fid, post_hash, timestamp)
+                VALUES (?, ?, ?, ?)
+            """, (nominator_fid, nominee_fid, post_hash, timestamp))
+            self.conn.commit()
+        except sqlite3.IntegrityError as e:
+            print(f"Failed to record nomination: {e}")
+            # Consider logging the error or raising the exception
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
 
-# Initialize the database tables when the module is imported
-create_tables()
+    def get_daily_leader(self):
+        """
+        Retrieves the current "Based Creator of the Day" post from the database.
+        """
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT p.* 
+                FROM posts p
+                JOIN based_creator_of_day b ON p.fid = b.fid
+                WHERE b.date = DATE('now')
+                ORDER BY p.likes DESC
+                LIMIT 1
+            """)
+            result = cursor.fetchone()
+            if result:
+                return {
+                    "hash": result[0],
+                    "fid": result[1],
+                    "username": result[2],
+                    "text": result[3],
+                    "likes": result[4],
+                    "timestamp": result[5]
+                }
+        except sqlite3.Error as e:
+            print(f"An error occurred while retrieving daily leader: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
+        return None
+
+    def mark_based_creator_of_the_day(self, fid: int):
+        """Marks the given user as the 'Based Creator of the Day'."""
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO based_creator_of_day (fid, date) VALUES (?, DATE('now'))", (fid,))
+            self.conn.commit()
+        except sqlite3.IntegrityError as e:
+            print(f"Failed to mark based creator of the day: {e}")
+            # Consider logging the error
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            # Consider logging the error
+        finally:
+            self.close()
+
+    def get_leaderboard(self) -> List[dict]:
+        """
+        Retrieves the leaderboard data from the database.
+        """
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT username, COUNT(nominee_fid) as points
+                FROM nominations
+                LEFT JOIN users ON users.fid = nominee_fid
+                GROUP BY username
+                ORDER BY points DESC
+                LIMIT 10
+            """
+            )
+            results = cursor.fetchall()
+
+            leaderboard = []
+            for result in results:
+                leaderboard.append({"username": result[0], "points": result[1]})
+            return leaderboard
+
+        except sqlite3.Error as e:
+            print(f"An error occurred while retrieving leaderboard data: {e}")
+            # Consider logging the error
+            return []  # Return an empty list in case of error
+        finally:
+            self.close()
+
+    def is_valid_username(self, username: str) -> bool:
+        """Checks if a username is valid according to Farcaster rules."""
+        return bool(re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,14}[a-z0-9])?", username))

@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 from agentkit_python.cdp_agentkit_core.actions import Action
-from ..utils.farcaster import post_cast
-from ..utils.database import get_leaderboard
+from agentkit_python.cdp_agentkit_core.utils.farcaster import post_cast
+from agentkit_python.cdp_agentkit_core.utils.database import Database
 
 # Load environment variables
 load_dotenv()
@@ -12,13 +12,14 @@ class UpdateLeaderboard(Action):
         self.signer_uuid = os.getenv("SIGNER_UUID")
         self.neynar_api_key = os.getenv("NEYNAR_API_KEY")
         self.theo_farcaster_username = os.getenv("THEO_FARCASTER_USERNAME")
+        self.db = Database()
 
     async def run(self, *args, **kwargs):
         """
         Updates and publishes the leaderboard.
         """
         print("Updating leaderboard...")
-        leaderboard = get_leaderboard()
+        leaderboard = self.db.get_leaderboard()
         leaderboard_cast = "🏆 Top Creators Leaderboard (Based on Nominations):\n\n"
         for i, creator in enumerate(leaderboard):
             leaderboard_cast += f"{i+1}. @{creator['username']} - {creator['points']} points\n"

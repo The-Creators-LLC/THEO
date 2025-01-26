@@ -3,6 +3,7 @@ from typing import List, Optional, TypedDict, Dict, Any
 from dotenv import load_dotenv
 import requests
 import json
+import re
 
 # Load environment variables
 load_dotenv()
@@ -22,6 +23,10 @@ class Cast(TypedDict):
     reactions: Dict[str, Any]
     mentions: List[User]
     parent_hash: Optional[str]
+
+def is_valid_username(username: str) -> bool:
+    """Checks if a username is valid according to Farcaster rules."""
+    return bool(re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,14}[a-z0-9])?", username))
 
 async def fetch_casts(neynar_api_key: str, channel_id: Optional[str] = None, keyword_filter: Optional[str] = None, limit: int = 100) -> List[Cast]:
     """
@@ -250,7 +255,7 @@ async def post_cast(neynar_api_key: str, text: str, signer_uuid: str, channel_id
         neynar_api_key: The Neynar API key.
         text: The text of the cast.
         signer_uuid: The UUID of the signer.
-        channel_id: The channel to post to.
+        channel_id: The channel to post to (not used in this implementation).
         reply_to: The hash of the cast to reply to.
 
     Returns:
@@ -271,10 +276,10 @@ async def post_cast(neynar_api_key: str, text: str, signer_uuid: str, channel_id
         if reply_to:
             # Post a reply
             payload["parent_hash"] = reply_to
-            url = f"https://api.neynar.com/v2/farcaster/cast"
+            url = "https://api.neynar.com/v2/farcaster/cast"
         else:
             # Post a regular cast
-            url = f"https://api.neynar.com/v2/farcaster/cast"
+            url = "https://api.neynar.com/v2/farcaster/cast"
 
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
@@ -282,7 +287,7 @@ async def post_cast(neynar_api_key: str, text: str, signer_uuid: str, channel_id
         response_json = response.json()
 
         if response_json:
-            return response_json["hash"]
+            return response_json["hash"]  # Assuming Neynar returns the cast hash
         else:
             print(f"Failed to post cast: {response_json}")
             return ""
