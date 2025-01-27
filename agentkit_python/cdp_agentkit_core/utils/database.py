@@ -1,6 +1,7 @@
 import sqlite3
 from typing import List, Optional
 import re
+import os
 
 DATABASE_NAME = "theo_data.db"  # Database file name
 
@@ -232,7 +233,7 @@ class Database:
             # Consider logging the error
         finally:
             self.close()
-
+            
     def get_leaderboard(self) -> List[dict]:
         """
         Retrieves the leaderboard data from the database.
@@ -268,3 +269,57 @@ class Database:
     def is_valid_username(self, username: str) -> bool:
         """Checks if a username is valid according to Farcaster rules."""
         return bool(re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,14}[a-z0-9])?", username))
+    
+    def format_leaderboard(self, leaderboard_data: List[dict]) -> str:
+        """Formats the leaderboard data into a string for display."""
+        leaderboard_string = "🏆 Top Creators Leaderboard (Based on Nominations):\n\n"
+        for i, creator in enumerate(leaderboard_data):
+            leaderboard_string += f"{i+1}. @{creator['username']} - {creator['points']} points\n"
+        leaderboard_string += f"\nNominate your favorite creators by tagging @{os.getenv('THEO_FARCASTER_USERNAME')} in the comments of their posts!"
+        return leaderboard_string
+    
+    def get_most_liked_posts(self, start_time: str, limit: int = 3) -> List[dict]:
+        """
+        Retrieves the most liked posts created after a specific time, limited to a certain number.
+
+        Args:
+            start_time: The timestamp for the earliest posts to retrieve.
+            limit: The maximum number of posts to return.
+
+        Returns:
+            A list of dictionaries, each representing a post.
+        """
+        self.connect()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM posts
+                WHERE timestamp >= ?
+                ORDER BY likes DESC
+                LIMIT ?
+                """,
+                (start_time, limit),
+            )
+            results = cursor.fetchall()
+
+            posts = []
+            for result in results:
+                posts.append(
+                    {
+                        "hash": result[0],
+                        "fid": result[1],
+                        "username": result[2],
+                        "text": result[3],
+                        "likes": result[4],
+                        "timestamp": result[5],
+                    }
+                )
+            return posts
+
+        except sqlite3.Error as e:
+            print(f"An error occurred while retrieving most liked posts: {e}")
+            return []
+        finally:
+            self.close()
